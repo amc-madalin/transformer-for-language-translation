@@ -130,3 +130,118 @@ class ResidualConnection(nn.Module):
         
     def froward(self, x: torch.Tensor, sublayer: nn.Module):
         return x + self.dropout(sublayer(self.layer_norm(x)))
+    
+class EncoderBlock(nn.Module):
+    
+    def __init__(self, d_model: int, num_heads: int, d_ff: int, dropout: float = 0.1):
+        super().__init__()
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_ff = d_ff
+        self.dropout = nn.Dropout(dropout)
+        
+        self.self_attention_block = MultiHeadAttentionBlock(d_model, num_heads, dropout)
+        self.residual_connection_1 = ResidualConnection(d_model, dropout)
+        self.feed_forward_block = FeedForwardBlock(d_model, d_ff, dropout)
+        self.residual_connection_2 = ResidualConnection(d_model, dropout)
+        
+    def forward(self, x: torch.Tensor, mask: torch.Tensor):
+        x = self.residual_connection_1(x, lambda x: self.self_attention_block(x, x, x, mask))
+        x = self.residual_connection_2(x, self.feed_forward_block)
+        return x
+    
+class Encoder(nn.Module):
+    
+    def __init__(self, layers: nn.ModuleList, d_model: int):
+        super().__init__()
+        self.layers = layers
+        self.norm = LayerNormalization(d_model)
+        
+    def forward(self, x, mask):
+        for layer in self.layers:
+            x = layer(x, mask)
+        return self.norm(x)
+    
+class DecoderBlock(nn.Module):
+    
+    def __init__(self, d_model: int, num_heads: int, d_ff: int, dropout: float = 0.1):
+        super().__init__()
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_ff = d_ff
+        self.dropout = nn.Dropout(dropout)
+        
+        self.self_attention_block = MultiHeadAttentionBlock(d_model, num_heads, dropout)
+        self.residual_connection_1 = ResidualConnection(d_model, dropout)
+        self.cross_attention_block = MultiHeadAttentionBlock(d_model, num_heads, dropout)
+        self.residual_connection_2 = ResidualConnection(d_model, dropout)
+        self.feed_forward_block = FeedForwardBlock(d_model, d_ff, dropout)
+        self.residual_connection_3 = ResidualConnection(d_model, dropout)
+        
+    def forward(self, x: torch.Tensor, encoder_output: torch.Tensor, src_mask: torch.Tensor, tgt_mask: torch.Tensor):
+        x = self.residual_connection_1(x, lambda x: self.self_attention_block(x, x, x, tgt_mask))
+        x = self.residual_connection_2(x, lambda x: self.cross_attention_block(x, encoder_output, encoder_output, src_mask))
+        x = self.residual_connection_3(x, self.feed_forward_block)
+        return x
+    
+class Decoder(nn.Module):
+    
+    def __init__(self, layers: nn.ModuleList, d_model: int):
+        super().__init__()
+        self.layers = layers
+        self.norm = LayerNormalization(d_model)
+    
+    def forward(self, x: torch.Tensor, encoder_output: torch.Tensor, src_mask: torch.Tensor, tgt_mask: torch.Tensor):
+        for layer in self.layers:
+            x = layer(x, encoder_output, src_mask, tgt_mask)
+        return self.norm(x)
+    
+class ProjectionLayer(nn.Module):
+    
+    def __init__(self, d_model: int, vocab_size: int):
+        super().__init__()
+        self.d_model = d_model
+        self.vocab_size = vocab_size
+        self.linear = nn.Linear(d_model, vocab_size)
+        
+    def forward(self, x: torch.Tensor):
+        # x.shape = (batch_size, seq_len, d_model) -> (batch_size, seq_len, vocab_size)
+        return torch.log_softmax(self.linear(x), dim=-1)
+    
+class Transformer(nn.Module):
+    
+    def __init__(self, encoder: nn.Module, decoder: nn.Module, src_embed: nn.Module, tgt_embed: nn.Module, src_pos: PositionalEncoding, tgt_pos: PositionalEncoding, projection_layer: nn.Module):
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.src_embed = src_embed
+        self.tgt_embed = tgt_embed
+        self.src_pos = src_pos
+        self.tgt_pos = tgt_pos
+        self.projection_layer = projection_layer
+        
+    def encode(self, src: torch.Tensor, src_mask: torch.Tensor):
+        return self.encoder(self.src_pos(self.src_embed(src)), src_mask)
+    
+    def decode(self, tgt: torch.Tensor, encoder_output: torch.Tensor, src_mask: torch.Tensor, tgt_mask: torch.Tensor):
+        return self.decoder(self.tgt_pos(self.tgt_embed(tgt)), encoder_output, src_mask, tgt_mask)
+    
+    def forward(self, src: torch.Tensor, tgt: torch.Tensor, src_mask: torch.Tensor, tgt_mask: torch.Tensor):
+        return self.projection_layer(self.decode(tgt, self.encode(src, src_mask), src_mask, tgt_mask))
+    
+def build_transformer(src_vocab_size: int, tgt_vocab_size: int, src_seq_len: int, tgt_seq_len: int, d_model: int, num_heads: int, d_ff: int, dropout: float = 0.1):
+    src_embed = InputEmbeddings(d_model, src_vocab_size)
+    tgt_embed = InputEmbeddings(d_model, tgt_vocab_size)
+    src_pos = PositionalEncoding(d_model, src_seq_len, dropout)
+    tgt_pos = PositionalEncoding(d_model, tgt_seq_len, dropout)
+    encoder = Encoder(nn.ModuleList([EncoderBlock(d_model, num_heads, d_ff, dropout) for _ in range(6)]), d_model)
+    decoder = Decoder(nn.ModuleList([DecoderBlock(d_model, num_heads, d_ff, dropout) for _ in range(6)]), d_model)
+    projection_layer = ProjectionLayer(d_model, tgt_vocab_size)
+    transformer = Transformer(encoder, decoder, src_embed, tgt_embed, src_pos, tgt_pos, projection_layer)
+    
+    # Initialize the parameters with Xavier uniform
+    for p in transformer.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform_(p)
+            
+    return transformer
