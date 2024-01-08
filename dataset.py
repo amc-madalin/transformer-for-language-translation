@@ -1,7 +1,6 @@
 import torch    
 import torch.nn as nn
 from torch.utils.data import Dataset
-from datasets import load_dataset
 
 class BilingualDataset(Dataset):
     
@@ -15,9 +14,9 @@ class BilingualDataset(Dataset):
         self.tgt_lang = tgt_lang
         self.seq_len = seq_len
         
-        self.sos_token = torch.Tensor(tokenizer_tgt.token_to_id("[SOS]"), dtype=torch.int64)
-        self.eos_token = torch.Tensor(tokenizer_tgt.token_to_id("[EOS]"), dtype=torch.int64)
-        self.pad_token = torch.Tensor(tokenizer_tgt.token_to_id("[PAD]"), dtype=torch.int64)
+        self.sos_token = torch.tensor([tokenizer_tgt.token_to_id("[SOS]")], dtype=torch.int64)
+        self.eos_token = torch.tensor([tokenizer_tgt.token_to_id("[EOS]")], dtype=torch.int64)
+        self.pad_token = torch.tensor([tokenizer_tgt.token_to_id("[PAD]")], dtype=torch.int64)
         
     def __len__(self):
         return len(self.ds)
@@ -38,21 +37,21 @@ class BilingualDataset(Dataset):
         
         encoder_input = torch.cat([
             self.sos_token,
-            torch.Tensor(enc_input_tokens, dtype=torch.int64),
+            torch.tensor(enc_input_tokens, dtype=torch.int64),
             self.eos_token,
-            torch.Tensor([self.pad_token] * enc_num_padding_tokens, dtype=torch.int64)
+            torch.tensor([self.pad_token] * enc_num_padding_tokens, dtype=torch.int64)
         ])
         
         decoder_input = torch.cat([
             self.sos_token,
-            torch.Tensor(dec_input_tokens, dtype=torch.int64),
-            torch.Tensor([self.pad_token] * dec_num_padding_tokens, dtype=torch.int64)
+            torch.tensor(dec_input_tokens, dtype=torch.int64),
+            torch.tensor([self.pad_token] * dec_num_padding_tokens, dtype=torch.int64)
         ])
         
         label = torch.cat([
-            torch.Tensor(dec_input_tokens, dtype=torch.int64),
+            torch.tensor(dec_input_tokens, dtype=torch.int64),
             self.eos_token,
-            torch.Tensor([self.pad_token] * dec_num_padding_tokens, dtype=torch.int64)
+            torch.tensor([self.pad_token] * dec_num_padding_tokens, dtype=torch.int64)
         ])
         
         assert encoder_input.shape == decoder_input.shape == label.shape == (self.seq_len,) 

@@ -31,8 +31,8 @@ class PositionalEncoding(nn.Module):
         pe[:, 1::2] = torch.cos(position * div_term)
         
         # Add a batch dimension to the positional encoding
-        self.pe = pe.unsqueeze(0) # (1, seq_len, d_model)
-        
+        pe = pe.unsqueeze(0) # (1, seq_len, d_model)
+        # Register the positional encoding as a buffer
         self.register_buffer('pe', pe)
         
     def forward(self, x):
@@ -111,7 +111,6 @@ class MultiHeadAttentionBlock(nn.Module):
         querry = querry.view(querry.shape[0], -1, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
         key = key.view(key.shape[0], -1, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
         value = value.view(value.shape[0], -1, self.num_heads, self.head_dim).permute(0, 2, 1, 3) # (batch_size, num_heads, seq_len, head_dim)
-        
         x, self.attention_scores = self.attention(querry, key, value, mask, self.dropout)
         
         # Concatenate the heads
@@ -128,7 +127,7 @@ class ResidualConnection(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.layer_norm = LayerNormalization(d_model)
         
-    def froward(self, x: torch.Tensor, sublayer: nn.Module):
+    def forward(self, x: torch.Tensor, sublayer: nn.Module):
         return x + self.dropout(sublayer(self.layer_norm(x)))
     
 class EncoderBlock(nn.Module):
@@ -226,16 +225,16 @@ class Transformer(nn.Module):
     def decode(self, tgt: torch.Tensor, encoder_output: torch.Tensor, src_mask: torch.Tensor, tgt_mask: torch.Tensor):
         return self.decoder(self.tgt_pos(self.tgt_embed(tgt)), encoder_output, src_mask, tgt_mask)
     
-    def forward(self, src: torch.Tensor, tgt: torch.Tensor, src_mask: torch.Tensor, tgt_mask: torch.Tensor):
+    def project(self, src: torch.Tensor, tgt: torch.Tensor, src_mask: torch.Tensor, tgt_mask: torch.Tensor):
         return self.projection_layer(self.decode(tgt, self.encode(src, src_mask), src_mask, tgt_mask))
     
-def build_transformer(src_vocab_size: int, tgt_vocab_size: int, src_seq_len: int, tgt_seq_len: int, d_model: int, num_heads: int, d_ff: int, dropout: float = 0.1):
+def build_transformer(src_vocab_size: int, tgt_vocab_size: int, src_seq_len: int, tgt_seq_len: int, d_model: int = 512, blocks: int = 6, num_heads: int = 8, d_ff: int = 2048, dropout: float = 0.1):
     src_embed = InputEmbeddings(d_model, src_vocab_size)
     tgt_embed = InputEmbeddings(d_model, tgt_vocab_size)
     src_pos = PositionalEncoding(d_model, src_seq_len, dropout)
     tgt_pos = PositionalEncoding(d_model, tgt_seq_len, dropout)
-    encoder = Encoder(nn.ModuleList([EncoderBlock(d_model, num_heads, d_ff, dropout) for _ in range(6)]), d_model)
-    decoder = Decoder(nn.ModuleList([DecoderBlock(d_model, num_heads, d_ff, dropout) for _ in range(6)]), d_model)
+    encoder = Encoder(nn.ModuleList([EncoderBlock(d_model, num_heads, d_ff, dropout) for _ in range(blocks)]), d_model)
+    decoder = Decoder(nn.ModuleList([DecoderBlock(d_model, num_heads, d_ff, dropout) for _ in range(blocks)]), d_model)
     projection_layer = ProjectionLayer(d_model, tgt_vocab_size)
     transformer = Transformer(encoder, decoder, src_embed, tgt_embed, src_pos, tgt_pos, projection_layer)
     
