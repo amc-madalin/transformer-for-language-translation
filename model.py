@@ -225,8 +225,9 @@ class Transformer(nn.Module):
     def decode(self, tgt: torch.Tensor, encoder_output: torch.Tensor, src_mask: torch.Tensor, tgt_mask: torch.Tensor):
         return self.decoder(self.tgt_pos(self.tgt_embed(tgt)), encoder_output, src_mask, tgt_mask)
     
-    def project(self, src: torch.Tensor, tgt: torch.Tensor, src_mask: torch.Tensor, tgt_mask: torch.Tensor):
-        return self.projection_layer(self.decode(tgt, self.encode(src, src_mask), src_mask, tgt_mask))
+    def project(self, x):
+        # (batch, seq_len, vocab_size)
+        return self.projection_layer(x)
     
 def build_transformer(src_vocab_size: int, tgt_vocab_size: int, src_seq_len: int, tgt_seq_len: int, d_model: int = 512, blocks: int = 6, num_heads: int = 8, d_ff: int = 2048, dropout: float = 0.1):
     src_embed = InputEmbeddings(d_model, src_vocab_size)
