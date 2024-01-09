@@ -24,10 +24,10 @@ This project represents a personal journey in learning to code a Transformer mod
 To effectively use this project, follow these steps:
 
 1. **Clone the Repository**:
-   Begin by cloning the repository to your local machine. Use the following command, replacing `<repository_url>` with the actual URL of the repository:
+   Begin by cloning the repository to your local machine. Use the following command:
 
    ```bash
-   git clone <repository_url>
+   git clone https://github.com/amc-madalin/transformer-for-language-translation.git
    ```
 
 2. **Create a Python Environment**:
