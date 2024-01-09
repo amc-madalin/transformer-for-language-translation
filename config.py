@@ -2,7 +2,7 @@ import os
 
 def get_config():
     return {
-        "batch_size": 32,
+        "batch_size": 8,
         "num_epochs": 10,
         "lr": 0.0001,
         "seq_len": 350,
